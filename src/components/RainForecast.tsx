@@ -234,11 +234,12 @@ export default function RainForecast() {
                 backgroundColor: 'transparent',
                 textAlign: 'center',
                 appearance: 'none',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                color: '#000000'
               }}
             >
               {districts.map((district) => (
-                <option key={district.name} value={district.name}>
+                <option key={district.name} value={district.name} style={{ color: '#000000' }}>
                   {district.name}
                 </option>
               ))}
@@ -289,7 +290,7 @@ export default function RainForecast() {
                   ) : (
                     <>
                       Next rain expected around:{' '}
-                      <span style={{ fontWeight: '600' }}>
+                      <span style={{ fontWeight: '600', color: '#000000' }}>
                         {formatTime(getNextRainTime()!)}
                       </span>
                       <span style={{ color: '#6b7280' }}>
