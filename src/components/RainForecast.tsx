@@ -244,7 +244,7 @@ export default function RainForecast() {
                 </option>
               ))}
             </select>
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', marginLeft: '8px' }}>
+            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#000000', marginLeft: '8px' }}>
               , Ho Chi Minh City
             </span>
           </div>
@@ -263,7 +263,7 @@ export default function RainForecast() {
 
           {isCurrentlyRaining() ? (
             <div style={{ textAlign: 'center' }}>
-              <p style={{ textAlign: 'center' }}>
+              <p style={{ textAlign: 'center', color: '#000000' }}>
                 Intensity: {getRainIntensityLabel(weatherData?.current.precipitation || 0)}
                 <br />
                 <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
@@ -271,9 +271,9 @@ export default function RainForecast() {
                 </span>
               </p>
               {getRainEndTime() && (
-                <p style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+                <p style={{ marginTop: '0.5rem', textAlign: 'center', color: '#000000' }}>
                   Expected to stop around:{' '}
-                  <span style={{ fontWeight: '600' }}>
+                  <span style={{ fontWeight: '600', color: '#000000' }}>
                     {getRainEndTime() && formatTime(getRainEndTime()!)}
                   </span>
                 </p>
@@ -289,7 +289,9 @@ export default function RainForecast() {
                     </span>
                   ) : (
                     <>
-                      Next rain expected around:{' '}
+                      <span style={{ color: '#000000' }}>
+                        Next rain expected around:{' '}
+                      </span>
                       <span style={{ fontWeight: '600', color: '#000000' }}>
                         {formatTime(getNextRainTime()!)}
                       </span>
