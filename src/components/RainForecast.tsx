@@ -284,7 +284,7 @@ export default function RainForecast() {
               {getNextRainTime() && (
                 <p style={{ textAlign: 'center' }}>
                   {getNextRainTime() === 'no_rain_today' ? (
-                    <span style={{ fontWeight: '600' }}>
+                    <span style={{ fontWeight: '600', color: '#000000' }}>
                       {formatTime('no_rain_today')}
                     </span>
                   ) : (
