@@ -22,7 +22,7 @@ interface WeatherData {
 // HCMC Districts with approximate coordinates
 const districts: District[] = [
   { name: "District 1", lat: 10.7756, lon: 106.7019 },
-  { name: "District 2 (Thu Duc)", lat: 10.7872, lon: 106.7516 },
+  { name: "District 2", lat: 10.7872, lon: 106.7516 },
   { name: "District 3", lat: 10.7800, lon: 106.6822 },
   { name: "District 4", lat: 10.7579, lon: 106.7044 },
   { name: "District 5", lat: 10.7539, lon: 106.6633 },
@@ -108,12 +108,27 @@ export default function RainForecast() {
       time => new Date(time).getHours() === new Date().getHours()
     );
 
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    let firstRainIndex = -1;
     for (let i = currentHourIndex; i < weatherData.hourly.time.length; i++) {
       if (weatherData.hourly.precipitation_probability[i] >= 40) {
-        return new Date(weatherData.hourly.time[i]);
+        firstRainIndex = i;
+        break;
       }
     }
-    return null;
+
+    if (firstRainIndex === -1) return null;
+
+    const nextRainTime = new Date(weatherData.hourly.time[firstRainIndex]);
+    if (nextRainTime >= tomorrow) {
+      return 'no_rain_today';
+    }
+
+    return nextRainTime;
   };
 
   const getRainEndTime = () => {
@@ -141,6 +156,20 @@ export default function RainForecast() {
     return weatherData.hourly.precipitation_probability[currentHourIndex];
   };
 
+  const formatTime = (date: Date | 'no_rain_today') => {
+    if (date === 'no_rain_today') {
+      return 'For the next 24 hours, yay! 🌞';
+    }
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Ho_Chi_Minh'
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -166,69 +195,130 @@ export default function RainForecast() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Saigon Rain Forecast
-        </h1>
-
-        <div className="mb-6">
-          <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-2">
-            Select District
-          </label>
-          <select
-            id="district"
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            value={selectedDistrict.name}
-            onChange={(e) => {
-              const district = districts.find(d => d.name === e.target.value);
-              if (district) setSelectedDistrict(district);
-            }}
-          >
-            {districts.map((district) => (
-              <option key={district.name} value={district.name}>
-                {district.name}
-              </option>
-            ))}
-          </select>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      width: '100vw',
+      backgroundColor: '#f3f4f6',
+      padding: '1rem',
+      boxSizing: 'border-box',
+      position: 'absolute',
+      left: 0,
+      top: 0
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '400px',
+        backgroundColor: 'white',
+        borderRadius: '0.5rem',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        padding: '1.5rem'
+      }}>
+        {/* District title */}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <select
+              value={selectedDistrict.name}
+              onChange={(e) => {
+                const district = districts.find(d => d.name === e.target.value);
+                if (district) setSelectedDistrict(district);
+              }}
+              style={{
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                border: '1px solid #d1d5db',
+                backgroundColor: 'transparent',
+                textAlign: 'center',
+                appearance: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {districts.map((district) => (
+                <option key={district.name} value={district.name}>
+                  {district.name}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', marginLeft: '8px' }}>
+              , Ho Chi Minh City
+            </span>
+          </div>
         </div>
         
-        {isCurrentlyRaining() ? (
-          <div className="mb-4">
-            <p className="text-lg text-blue-600">It's currently raining! ☔️</p>
-            <p className="text-md text-gray-700 mt-1">
-              Intensity: {getRainIntensityLabel(weatherData?.current.precipitation || 0)}
-              <br />
-              <span className="text-sm text-gray-500">
-                ({weatherData?.current.precipitation.toFixed(1)} mm/h)
-              </span>
-            </p>
-            {getRainEndTime() && (
-              <p className="mt-2">
-                Expected to stop around:{' '}
-                <span className="font-semibold">
-                  {getRainEndTime()?.toLocaleTimeString()}
-                </span>
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="mb-4">
-            <p className="text-lg text-gray-600">It's not raining right now ☀️</p>
-            {getNextRainTime() && (
-              <p className="mt-2">
-                Next rain expected around:{' '}
-                <span className="font-semibold">
-                  {getNextRainTime()?.toLocaleTimeString()}
-                </span>
+        {/* Rain status */}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <h2 style={{ 
+            fontSize: '1.25rem', 
+            fontWeight: '600', 
+            marginBottom: '1rem',
+            color: isCurrentlyRaining() ? '#2563eb' : '#4b5563' 
+          }}>
+            Is {isCurrentlyRaining() ? "Raining ☔️" : "Not Raining ☀️"}
+          </h2>
+
+          {isCurrentlyRaining() ? (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ textAlign: 'center' }}>
+                Intensity: {getRainIntensityLabel(weatherData?.current.precipitation || 0)}
                 <br />
-                <span className="text-sm text-gray-500">
-                  Probability: {getCurrentProbability()}%
+                <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                  ({weatherData?.current.precipitation.toFixed(1)} mm/h)
                 </span>
               </p>
-            )}
-          </div>
-        )}
+              {getRainEndTime() && (
+                <p style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+                  Expected to stop around:{' '}
+                  <span style={{ fontWeight: '600' }}>
+                    {getRainEndTime() && formatTime(getRainEndTime()!)}
+                  </span>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center' }}>
+              {getNextRainTime() && (
+                <p style={{ textAlign: 'center' }}>
+                  {getNextRainTime() === 'no_rain_today' ? (
+                    <span style={{ fontWeight: '600' }}>
+                      {formatTime('no_rain_today')}
+                    </span>
+                  ) : (
+                    <>
+                      Next rain expected around:{' '}
+                      <span style={{ fontWeight: '600' }}>
+                        {formatTime(getNextRainTime()!)}
+                      </span>
+                      <span style={{ color: '#6b7280' }}>
+                        {' '}({getCurrentProbability()}%)
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Last updated */}
+        <div style={{ 
+          marginTop: '1.5rem', 
+          paddingTop: '1rem', 
+          borderTop: '1px solid #e5e7eb',
+          textAlign: 'center'
+        }}>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', textAlign: 'center' }}>
+            Last updated: {' '}
+            {new Date().toLocaleString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: 'Asia/Ho_Chi_Minh'
+            })}
+          </p>
+        </div>
       </div>
     </div>
   );
