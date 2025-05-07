@@ -256,7 +256,7 @@ export default function RainForecast() {
             fontSize: '1.25rem', 
             fontWeight: '600', 
             marginBottom: '1rem',
-            color: isCurrentlyRaining() ? '#2563eb' : '#4b5563' 
+            color: isCurrentlyRaining() ? '#2563eb' : '#000000' 
           }}>
             Is {isCurrentlyRaining() ? "Raining ☔️" : "Not Raining ☀️"}
           </h2>
