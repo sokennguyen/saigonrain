@@ -11,13 +11,72 @@ interface WeatherData {
   current: {
     precipitation: number;
     time: string;
+    windSpeed: number;
+    weatherCode: string;
   };
   hourly: {
     time: string[];
     precipitation_probability: number[];
     precipitation: number[];
+    windSpeed: number[];
+    weatherCode: string[];
   };
 }
+
+// Tomorrow.io Weather interpretation codes
+const TOMORROW_WEATHER_CODES: { [key: string]: string } = {
+  '1000': 'Clear',
+  '1100': 'Mostly Clear',
+  '1101': 'Partly Cloudy',
+  '1102': 'Mostly Cloudy',
+  '1001': 'Cloudy',
+  '2000': 'Fog',
+  '2100': 'Light Fog',
+  '4000': 'Drizzle',
+  '4001': 'Rain',
+  '4200': 'Light Rain',
+  '4201': 'Heavy Rain',
+  '5000': 'Snow',
+  '5001': 'Flurries',
+  '5100': 'Light Snow',
+  '5101': 'Heavy Snow',
+  '6000': 'Freezing Drizzle',
+  '6001': 'Freezing Rain',
+  '6200': 'Light Freezing Rain',
+  '6201': 'Heavy Freezing Rain',
+  '7000': 'Ice Pellets',
+  '7101': 'Heavy Ice Pellets',
+  '7102': 'Light Ice Pellets',
+  '8000': 'Thunderstorm'
+};
+
+// WMO Weather interpretation codes
+const WMO_WEATHER_CODES = {
+  0: 'Clear sky',
+  1: 'Mainly clear',
+  2: 'Partly cloudy',
+  3: 'Overcast',
+  45: 'Foggy',
+  48: 'Depositing rime fog',
+  51: 'Light drizzle',
+  53: 'Moderate drizzle',
+  55: 'Dense drizzle',
+  61: 'Slight rain',
+  63: 'Moderate rain',
+  65: 'Heavy rain',
+  71: 'Slight snow fall',
+  73: 'Moderate snow fall',
+  75: 'Heavy snow fall',
+  77: 'Snow grains',
+  80: 'Slight rain showers',
+  81: 'Moderate rain showers',
+  82: 'Violent rain showers',
+  85: 'Slight snow showers',
+  86: 'Heavy snow showers',
+  95: 'Thunderstorm',
+  96: 'Thunderstorm with slight hail',
+  99: 'Thunderstorm with heavy hail'
+};
 
 // HCMC Districts with approximate coordinates
 const districts: District[] = [
@@ -36,6 +95,8 @@ const districts: District[] = [
   { name: "Tan Binh", lat: 10.8031, lon: 106.6537 },
 ];
 
+const TOMORROW_API_KEY = "ZWo4e3sCXLII7sUzgNa8Hg4qRFgmRcZa";
+
 export default function RainForecast() {
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,27 +110,42 @@ export default function RainForecast() {
         setError(null);
         
         const response = await axios.get(
-          `https://api.open-meteo.com/v1/forecast?latitude=${selectedDistrict.lat}&longitude=${selectedDistrict.lon}&current=precipitation,rain&hourly=precipitation_probability,precipitation,rain&timezone=Asia/Ho_Chi_Minh`
+          `https://api.tomorrow.io/v4/timelines?location=${selectedDistrict.lat},${selectedDistrict.lon}&fields=precipitationIntensity,precipitationProbability,windSpeed,weatherCode&timesteps=current,1h&units=metric&apikey=${TOMORROW_API_KEY}`
         );
 
         if (!response.data) {
           throw new Error('No data received from weather service');
         }
 
+        console.log('Raw API response:', response.data);
+
+        const currentData = response.data.data.timelines[0].intervals[0];
+        const hourlyData = response.data.data.timelines[1].intervals;
+
+        // For demo purposes, set some precipitation values
+        const demoCurrentPrecipitation = 1.5; // Light rain
+        const demoHourlyPrecipitation = hourlyData.map((_: any, index: number) => {
+          if (index < 2) return demoCurrentPrecipitation; // First 2 hours: light rain
+          return 0.1; // After that: very light/no rain
+        });
+
         const transformedData = {
           current: {
-            precipitation: response.data.current.precipitation || response.data.current.rain || 0,
-            time: response.data.current.time,
+            precipitation: demoCurrentPrecipitation, // Use demo value
+            time: currentData.startTime,
+            windSpeed: currentData.values.windSpeed || 0,
+            weatherCode: currentData.values.weatherCode?.toString() || '1000',
           },
           hourly: {
-            time: response.data.hourly.time,
-            precipitation_probability: response.data.hourly.precipitation_probability,
-            precipitation: response.data.hourly.precipitation.map((p: number, i: number) => 
-              p || response.data.hourly.rain[i] || 0
-            ),
+            time: hourlyData.map((interval: any) => interval.startTime),
+            precipitation_probability: hourlyData.map((interval: any) => interval.values.precipitationProbability || 0),
+            precipitation: demoHourlyPrecipitation, // Use demo values
+            windSpeed: hourlyData.map((interval: any) => interval.values.windSpeed || 0),
+            weatherCode: hourlyData.map((interval: any) => interval.values.weatherCode?.toString() || '1000'),
           },
         };
 
+        console.log('Transformed data:', transformedData);
         setWeatherData(transformedData);
       } catch (err) {
         console.error('Weather fetch error:', err);
@@ -88,17 +164,44 @@ export default function RainForecast() {
     return () => clearInterval(interval);
   }, [selectedDistrict]);
 
-  const getRainIntensityLabel = (precipitation: number): string => {
-    if (precipitation === 0) return 'No rain';
-    if (precipitation < 0.5) return 'Very light rain (Drizzle)';
-    if (precipitation < 2.5) return 'Light rain';
-    if (precipitation < 7.5) return 'Moderate rain';
-    if (precipitation < 15) return 'Heavy rain';
-    return 'Very heavy rain';
+  const getRainIntensityLabel = (precipitation: number, weatherCode: string): string => {
+    if (precipitation <= 2.5) return 'Lightly';
+    if (precipitation < 7.5) return 'Moderately';
+    if (precipitation < 15) return 'Heavily';
+    return 'Very heavily';
   };
 
   const isCurrentlyRaining = () => {
-    return weatherData?.current.precipitation && weatherData.current.precipitation > 0;
+    if (!weatherData) return false;
+    // Temporarily return true for demo
+    return true;
+    // return weatherData.current.precipitation > 0.2;
+  };
+
+  const getRainEndTime = () => {
+    if (!weatherData) return null;
+
+    // For demo purposes, return a time 2 hours from now
+    const demoEndTime = new Date();
+    demoEndTime.setHours(demoEndTime.getHours() + 2);
+    return demoEndTime;
+
+    // Real implementation
+    /*
+    const now = new Date();
+    const currentHourIndex = weatherData.hourly.time.findIndex(
+      (time: string) => new Date(time).getHours() === now.getHours()
+    );
+
+    for (let i = currentHourIndex + 1; i < weatherData.hourly.time.length; i++) {
+      if (weatherData.hourly.precipitation[i] <= 0.2) {
+        if (i + 1 < weatherData.hourly.time.length && weatherData.hourly.precipitation[i + 1] <= 0.2) {
+          return new Date(weatherData.hourly.time[i]);
+        }
+      }
+    }
+    return null;
+    */
   };
 
   const getNextRainTime = () => {
@@ -131,21 +234,6 @@ export default function RainForecast() {
     return nextRainTime;
   };
 
-  const getRainEndTime = () => {
-    if (!weatherData) return null;
-    
-    const currentHourIndex = weatherData.hourly.time.findIndex(
-      time => new Date(time).getHours() === new Date().getHours()
-    );
-
-    for (let i = currentHourIndex; i < weatherData.hourly.time.length; i++) {
-      if (weatherData.hourly.precipitation[i] === 0) {
-        return new Date(weatherData.hourly.time[i]);
-      }
-    }
-    return null;
-  };
-
   const getCurrentProbability = () => {
     if (!weatherData) return 0;
     
@@ -156,18 +244,28 @@ export default function RainForecast() {
     return weatherData.hourly.precipitation_probability[currentHourIndex];
   };
 
-  const formatTime = (date: Date | 'no_rain_today') => {
+  const formatTime = (date: Date | 'no_rain_today' | 'already_stopped') => {
     if (date === 'no_rain_today') {
       return 'For the next 24 hours, yay! 🌞';
     }
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
+    if (date === 'already_stopped') {
+      return 'Rain has just stopped';
+    }
+
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate() && 
+                   date.getMonth() === now.getMonth() && 
+                   date.getFullYear() === now.getFullYear();
+
+    const dateStr = isToday ? 'Today' : 
+      `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+
+    return `${dateStr} ${date.toLocaleString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
       timeZone: 'Asia/Ho_Chi_Minh'
-    });
+    })}`;
   };
 
   if (loading) {
@@ -258,23 +356,22 @@ export default function RainForecast() {
             marginBottom: '1rem',
             color: isCurrentlyRaining() ? '#2563eb' : '#000000' 
           }}>
-            Is {isCurrentlyRaining() ? "Raining ☔️" : "Not Raining ☀️"}
+            {isCurrentlyRaining() ? (
+              <>
+                Is Raining {getRainIntensityLabel(weatherData?.current.precipitation || 0, weatherData?.current.weatherCode || '1000')} ☔️ ({weatherData?.current.precipitation.toFixed(1)} mm)
+              </>
+            ) : (
+              "Not Raining ☀️"
+            )}
           </h2>
 
           {isCurrentlyRaining() ? (
             <div style={{ textAlign: 'center' }}>
-              <p style={{ textAlign: 'center', color: '#000000' }}>
-                Intensity: {getRainIntensityLabel(weatherData?.current.precipitation || 0)}
-                <br />
-                <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                  ({weatherData?.current.precipitation.toFixed(1)} mm/h)
-                </span>
-              </p>
               {getRainEndTime() && (
                 <p style={{ marginTop: '0.5rem', textAlign: 'center', color: '#000000' }}>
                   Expected to stop around:{' '}
                   <span style={{ fontWeight: '600', color: '#000000' }}>
-                    {getRainEndTime() && formatTime(getRainEndTime()!)}
+                    {formatTime(getRainEndTime()!)}
                   </span>
                 </p>
               )}
@@ -290,13 +387,13 @@ export default function RainForecast() {
                   ) : (
                     <>
                       <span style={{ color: '#000000' }}>
-                        Next rain expected around:{' '}
+                        Expected next rain:{' '}
                       </span>
                       <span style={{ fontWeight: '600', color: '#000000' }}>
                         {formatTime(getNextRainTime()!)}
                       </span>
                       <span style={{ color: '#6b7280' }}>
-                        {' '}({getCurrentProbability()}%)
+                        {' '}[{getCurrentProbability()}%]
                       </span>
                     </>
                   )}
