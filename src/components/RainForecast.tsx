@@ -93,9 +93,10 @@ const districts: District[] = [
   { name: "Binh Thanh", lat: 10.8109, lon: 106.7091 },
   { name: "Phu Nhuan", lat: 10.7989, lon: 106.6839 },
   { name: "Tan Binh", lat: 10.8031, lon: 106.6537 },
+  { name: "Thu Duc", lat: 10.8506, lon: 106.7714 },
 ];
 
-const TOMORROW_API_KEY = "ZWo4e3sCXLII7sUzgNa8Hg4qRFgmRcZa";
+const TOMORROW_API_KEY = "Qkt5ZZwuOBxiEn8diin1wtG71wbWsxNf";
 
 export default function RainForecast() {
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
@@ -109,43 +110,38 @@ export default function RainForecast() {
         setLoading(true);
         setError(null);
         
-        const response = await axios.get(
-          `https://api.tomorrow.io/v4/timelines?location=${selectedDistrict.lat},${selectedDistrict.lon}&fields=precipitationIntensity,precipitationProbability,windSpeed,weatherCode&timesteps=current,1h&units=metric&apikey=${TOMORROW_API_KEY}`
-        );
+        const url = `https://api.tomorrow.io/v4/timelines?location=${selectedDistrict.lat},${selectedDistrict.lon}&fields=precipitationIntensity,precipitationProbability,windSpeed,weatherCode&timesteps=current,1h&units=metric&apikey=${TOMORROW_API_KEY}`;
+        console.log('API URL:', url);
+
+        const response = await axios.get(url);
 
         if (!response.data) {
           throw new Error('No data received from weather service');
         }
 
-        console.log('Raw API response:', response.data);
+        const timelines = response.data.data.timelines;
+        const currentTimeline = timelines.find((tl: any) => tl.timestep === "current");
+        const hourlyTimeline = timelines.find((tl: any) => tl.timestep === "1h");
 
-        const currentData = response.data.data.timelines[0].intervals[0];
-        const hourlyData = response.data.data.timelines[1].intervals;
-
-        // For demo purposes, set some precipitation values
-        const demoCurrentPrecipitation = 1.5; // Light rain
-        const demoHourlyPrecipitation = hourlyData.map((_: any, index: number) => {
-          if (index < 2) return demoCurrentPrecipitation; // First 2 hours: light rain
-          return 0.1; // After that: very light/no rain
-        });
+        const currentData = currentTimeline ? currentTimeline.intervals[0] : null;
+        const hourlyData = hourlyTimeline ? hourlyTimeline.intervals : [];
 
         const transformedData = {
           current: {
-            precipitation: demoCurrentPrecipitation, // Use demo value
-            time: currentData.startTime,
-            windSpeed: currentData.values.windSpeed || 0,
-            weatherCode: currentData.values.weatherCode?.toString() || '1000',
+            precipitation: currentData?.values.precipitationIntensity || 0,
+            time: currentData?.startTime || '',
+            windSpeed: currentData?.values.windSpeed || 0,
+            weatherCode: currentData?.values.weatherCode?.toString() || '1000',
           },
           hourly: {
             time: hourlyData.map((interval: any) => interval.startTime),
             precipitation_probability: hourlyData.map((interval: any) => interval.values.precipitationProbability || 0),
-            precipitation: demoHourlyPrecipitation, // Use demo values
+            precipitation: hourlyData.map((interval: any) => interval.values.precipitationIntensity || 0),
             windSpeed: hourlyData.map((interval: any) => interval.values.windSpeed || 0),
             weatherCode: hourlyData.map((interval: any) => interval.values.weatherCode?.toString() || '1000'),
           },
         };
 
-        console.log('Transformed data:', transformedData);
         setWeatherData(transformedData);
       } catch (err) {
         console.error('Weather fetch error:', err);
@@ -173,25 +169,24 @@ export default function RainForecast() {
 
   const isCurrentlyRaining = () => {
     if (!weatherData) return false;
-    // Temporarily return true for demo
-    return true;
-    // return weatherData.current.precipitation > 0.2;
+    return weatherData.current.precipitation > 0.2;
   };
 
   const getRainEndTime = () => {
     if (!weatherData) return null;
 
-    // For demo purposes, return a time 2 hours from now
-    const demoEndTime = new Date();
-    demoEndTime.setHours(demoEndTime.getHours() + 2);
-    return demoEndTime;
-
-    // Real implementation
-    /*
     const now = new Date();
-    const currentHourIndex = weatherData.hourly.time.findIndex(
-      (time: string) => new Date(time).getHours() === now.getHours()
-    );
+    const nowHCM = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentHourIndex = weatherData.hourly.time.findIndex((timeStr) => {
+      const forecastDate = new Date(timeStr);
+      const forecastHCM = new Date(forecastDate.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      return (
+        forecastHCM.getFullYear() === nowHCM.getFullYear() &&
+        forecastHCM.getMonth() === nowHCM.getMonth() &&
+        forecastHCM.getDate() === nowHCM.getDate() &&
+        forecastHCM.getHours() === nowHCM.getHours()
+      );
+    });
 
     for (let i = currentHourIndex + 1; i < weatherData.hourly.time.length; i++) {
       if (weatherData.hourly.precipitation[i] <= 0.2) {
@@ -201,46 +196,68 @@ export default function RainForecast() {
       }
     }
     return null;
-    */
   };
 
-  const getNextRainTime = () => {
-    if (!weatherData) return null;
+  const getNextRainTime = (): { time: Date; probability: number } | 'no_rain_today' => {
+    if (!weatherData) return 'no_rain_today';
     
-    const currentHourIndex = weatherData.hourly.time.findIndex(
-      time => new Date(time).getHours() === new Date().getHours()
-    );
+    const now = new Date();
+    const nowHCM = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentHourIndex = weatherData.hourly.time.findIndex((timeStr) => {
+      const forecastDate = new Date(timeStr);
+      const forecastHCM = new Date(forecastDate.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      return (
+        forecastHCM.getFullYear() === nowHCM.getFullYear() &&
+        forecastHCM.getMonth() === nowHCM.getMonth() &&
+        forecastHCM.getDate() === nowHCM.getDate() &&
+        forecastHCM.getHours() === nowHCM.getHours()
+      );
+    });
 
-    const today = new Date();
+    const today = nowHCM;
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
 
+    // Look for the first hour with precipitation probability >= 30%
     let firstRainIndex = -1;
     for (let i = currentHourIndex; i < weatherData.hourly.time.length; i++) {
-      if (weatherData.hourly.precipitation_probability[i] >= 40) {
+      if (weatherData.hourly.precipitation_probability[i] >= 30) {
         firstRainIndex = i;
         break;
       }
     }
 
-    if (firstRainIndex === -1) return null;
+    if (firstRainIndex === -1) return 'no_rain_today';
 
     const nextRainTime = new Date(weatherData.hourly.time[firstRainIndex]);
-    if (nextRainTime >= tomorrow) {
+    const nextRainHCM = new Date(nextRainTime.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    if (nextRainHCM >= tomorrow) {
       return 'no_rain_today';
     }
 
-    return nextRainTime;
+    return { time: nextRainHCM, probability: weatherData.hourly.precipitation_probability[firstRainIndex] };
   };
 
   const getCurrentProbability = () => {
     if (!weatherData) return 0;
     
-    const currentHourIndex = weatherData.hourly.time.findIndex(
-      time => new Date(time).getHours() === new Date().getHours()
-    );
+    const now = new Date();
+    const nowHCM = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentHourIndex = weatherData.hourly.time.findIndex((timeStr) => {
+      const forecastDate = new Date(timeStr);
+      const forecastHCM = new Date(forecastDate.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      return (
+        forecastHCM.getFullYear() === nowHCM.getFullYear() &&
+        forecastHCM.getMonth() === nowHCM.getMonth() &&
+        forecastHCM.getDate() === nowHCM.getDate() &&
+        forecastHCM.getHours() === nowHCM.getHours()
+      );
+    });
     
+    // Handle case where currentHourIndex might be -1 if the current hour is not in the forecast data
+    if (currentHourIndex === -1) return 0;
+
     return weatherData.hourly.precipitation_probability[currentHourIndex];
   };
 
@@ -267,6 +284,19 @@ export default function RainForecast() {
       timeZone: 'Asia/Ho_Chi_Minh'
     })}`;
   };
+
+  // Helper to get rain probability message
+  const getRainProbabilityMessage = (prob: number) => {
+    if (prob <= 20) return 'No rain expected';
+    if (prob <= 40) return 'Slight chance of rain';
+    if (prob <= 60) return 'Chance of rain';
+    return 'Rain likely';
+  };
+
+  const nextRainForecast = getNextRainTime();
+
+  // Debug log to check the value of nextRainForecast
+  console.log('nextRainForecast:', nextRainForecast);
 
   if (loading) {
     return (
@@ -365,40 +395,38 @@ export default function RainForecast() {
             )}
           </h2>
 
-          {isCurrentlyRaining() ? (
+          {/* Expected rain stop/next rain time */}
+          {isCurrentlyRaining() && getRainEndTime() && (
             <div style={{ textAlign: 'center' }}>
-              {getRainEndTime() && (
-                <p style={{ marginTop: '0.5rem', textAlign: 'center', color: '#000000' }}>
-                  Expected to stop around:{' '}
-                  <span style={{ fontWeight: '600', color: '#000000' }}>
-                    {formatTime(getRainEndTime()!)}
-                  </span>
-                </p>
-              )}
+              <p style={{ marginTop: '0.5rem', textAlign: 'center', color: '#000000' }}>
+                Expected to stop around:{' '}
+                <span style={{ fontWeight: '600', color: '#000000' }}>
+                  {formatTime(getRainEndTime()!)}
+                </span>
+              </p>
             </div>
-          ) : (
+          )}
+          {!isCurrentlyRaining() && nextRainForecast && (
             <div style={{ textAlign: 'center' }}>
-              {getNextRainTime() && (
-                <p style={{ textAlign: 'center' }}>
-                  {getNextRainTime() === 'no_rain_today' ? (
-                    <span style={{ fontWeight: '600', color: '#000000' }}>
-                      {formatTime('no_rain_today')}
+              <p style={{ textAlign: 'center' }}>
+                {typeof nextRainForecast === 'string' ? (
+                  <span style={{ fontWeight: '600', color: '#000000' }}>
+                    {formatTime('no_rain_today')}
+                  </span>
+                ) : (
+                  <>
+                    <span style={{ color: '#000000' }}>
+                      Expected next rain:{' '}
                     </span>
-                  ) : (
-                    <>
-                      <span style={{ color: '#000000' }}>
-                        Expected next rain:{' '}
-                      </span>
-                      <span style={{ fontWeight: '600', color: '#000000' }}>
-                        {formatTime(getNextRainTime()!)}
-                      </span>
-                      <span style={{ color: '#6b7280' }}>
-                        {' '}[{getCurrentProbability()}%]
-                      </span>
-                    </>
-                  )}
-                </p>
-              )}
+                    <span style={{ fontWeight: '600', color: '#000000' }}>
+                      {formatTime(nextRainForecast.time)}
+                    </span>
+                    <span style={{ color: '#2563eb', fontWeight: 500, marginLeft: 4 }}>
+                      {' '}({getRainProbabilityMessage(nextRainForecast.probability)})
+                    </span>
+                  </>
+                )}
+              </p>
             </div>
           )}
         </div>
